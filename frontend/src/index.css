@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-zinc-850: #202022;
+  --color-zinc-950: #09090b;
+
+  --color-brand-emerald: #10b981;
+  --color-brand-amber: #f59e0b;
+  --color-brand-crimson: #ef4444;
+
+  --color-primary-strong: #2783de;
+  --color-primary-text: #f0efed;
+  --color-secondary-text: #a1a1aa;
+}
+
+@layer base {
+  :root {
+    --background: #09090b;
+    --foreground: #f0efed;
+    --muted: #202022;
+    --muted-foreground: #a1a1aa;
+    --border: #27272a;
+    --ring: #2783de;
+    --radius: 0.5rem;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 rounded-xl shadow-sm;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800/50 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2783de];
+  }
+  
+  .nav-item.active {
+    @apply bg-zinc-800/80 text-zinc-100;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2783de] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-zinc-100 text-zinc-900 hover:bg-zinc-200;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-zinc-800/50 hover:text-zinc-100 text-zinc-400;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
