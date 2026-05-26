@@ -62,7 +62,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const user = session?.user;
   const fullName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "User";
-  const avatarUrl = user?.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`;
+  const rawAvatar = user?.user_metadata?.avatar_url;
+  
+  const avatarUrl = rawAvatar 
+    ? (rawAvatar.includes('dicebear') ? rawAvatar : `https://wsrv.nl/?url=${encodeURIComponent(rawAvatar)}&w=150&h=150&fit=cover`) 
+    : `https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`;
 
   return (
     <aside className="w-[260px] flex-shrink-0 bg-zinc-900/50 border-r border-zinc-800/60 flex flex-col transition-all duration-300">
@@ -182,6 +186,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           <img 
             src={avatarUrl} 
             alt={fullName}
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`;
+            }}
             className="w-9 h-9 rounded-xl border border-zinc-700/80 object-cover shadow-sm"
           />
           <div className="flex-1 min-w-0">

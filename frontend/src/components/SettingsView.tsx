@@ -167,6 +167,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         data: { full_name: unifiedSettings.displayName, avatar_url: unifiedSettings.avatarUrl }
       });
       if (error) throw error;
+      await supabase.auth.refreshSession();
       triggerSaveToast('Profile details updated successfully!');
     } catch (err: any) {
       console.error(err);

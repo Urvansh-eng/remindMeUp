@@ -57,19 +57,31 @@ const authMiddleware = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
 
-
-
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid or expired session token' });
     }
     req.user = user;
+    req.userToken = token;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Failed to authenticate user token' });
   }
 };
+
+// Create a per-request Supabase client that authenticates as the user
+// This is required because the tasks table has RLS enabled
+function getAuthenticatedSupabase(userToken) {
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${userToken}`
+      }
+    }
+  });
+}
 
 // Apply authMiddleware globally to all task API endpoints
 app.use('/api/tasks', authMiddleware);
@@ -79,8 +91,9 @@ app.use('/api/tasks', authMiddleware);
 // Get all tasks for the logged in user
 app.get('/api/tasks', async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
 
-  const { data, error } = await supabase
+  const { data, error } = await userSupabase
     .from('tasks')
     .select('*')
     .order('id', { ascending: true });
@@ -91,7 +104,7 @@ app.get('/api/tasks', async (req, res) => {
   }
 
   // Filter tasks belonging to the current user (using category prefix: "userId:category")
-  const userTasks = data
+  const userTasks = (data || [])
     .filter(task => task.category && task.category.startsWith(`${userId}:`))
     .map(task => ({
       ...task,
@@ -105,21 +118,22 @@ app.get('/api/tasks', async (req, res) => {
 // Create a new task for the logged in user
 app.post('/api/tasks', async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
   const { title, priority, date, completed, duration, category, reminder_offset_minutes } = req.body;
 
   // Prefix the category with user's ID to isolate tasks
   const prefixedCategory = `${userId}:${category || 'General'}`;
   const offset = typeof reminder_offset_minutes === 'number' ? reminder_offset_minutes : 10;
 
-  let { data, error } = await supabase
+  let { data, error } = await userSupabase
     .from('tasks')
     .insert([{ title, priority, date, completed, duration, category: prefixedCategory, reminder_offset_minutes: offset }])
     .select();
 
   if (error) {
-    if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+    if (error.message && error.message.includes('column') && (error.message.includes('does not exist') || error.message.includes('Could not find'))) {
       console.warn("⚠️ Column 'reminder_offset_minutes' does not exist in Supabase tasks table yet. Inserting without it.");
-      const fallbackResult = await supabase
+      const fallbackResult = await userSupabase
         .from('tasks')
         .insert([{ title, priority, date, completed, duration, category: prefixedCategory }])
         .select();
@@ -147,11 +161,12 @@ app.post('/api/tasks', async (req, res) => {
 // Update a task (ensuring user owns it)
 app.put('/api/tasks/:id', async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
   const { id } = req.params;
   const updates = { ...req.body };
 
   // Verify ownership first
-  const { data: checkData, error: checkError } = await supabase
+  const { data: checkData, error: checkError } = await userSupabase
     .from('tasks')
     .select('category')
     .eq('id', id)
@@ -165,19 +180,19 @@ app.put('/api/tasks/:id', async (req, res) => {
     updates.category = `${userId}:${updates.category}`;
   }
 
-  let { data, error } = await supabase
+  let { data, error } = await userSupabase
     .from('tasks')
     .update(updates)
     .eq('id', id)
     .select();
 
   if (error) {
-    if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+    if (error.message && error.message.includes('column') && (error.message.includes('does not exist') || error.message.includes('Could not find'))) {
       console.warn("⚠️ Column 'reminder_offset_minutes' does not exist in Supabase tasks table yet. Updating without it.");
       const fallbackUpdates = { ...updates };
       delete fallbackUpdates.reminder_offset_minutes;
       
-      const fallbackResult = await supabase
+      const fallbackResult = await userSupabase
         .from('tasks')
         .update(fallbackUpdates)
         .eq('id', id)
@@ -205,9 +220,10 @@ app.put('/api/tasks/:id', async (req, res) => {
 // Clear completed tasks for the logged in user
 app.delete('/api/tasks/completed', authMiddleware, async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
 
   try {
-    const { data, error: fetchError } = await supabase
+    const { data, error: fetchError } = await userSupabase
       .from('tasks')
       .select('id, category, completed');
 
@@ -223,7 +239,7 @@ app.delete('/api/tasks/completed', authMiddleware, async (req, res) => {
       return res.status(200).json({ message: 'No completed tasks found to clear' });
     }
 
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await userSupabase
       .from('tasks')
       .delete()
       .in('id', completedIds);
@@ -241,9 +257,10 @@ app.delete('/api/tasks/completed', authMiddleware, async (req, res) => {
 // Clear all tasks for a specific user (used when deleting account)
 app.delete('/api/tasks/clear-all', authMiddleware, async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
 
   try {
-    const { data, error: fetchError } = await supabase
+    const { data, error: fetchError } = await userSupabase
       .from('tasks')
       .select('id, category');
 
@@ -259,7 +276,7 @@ app.delete('/api/tasks/clear-all', authMiddleware, async (req, res) => {
       return res.status(200).json({ message: 'No tasks found to clear' });
     }
 
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await userSupabase
       .from('tasks')
       .delete()
       .in('id', allIds);
@@ -277,10 +294,11 @@ app.delete('/api/tasks/clear-all', authMiddleware, async (req, res) => {
 // Delete a task (ensuring user owns it)
 app.delete('/api/tasks/:id', async (req, res) => {
   const userId = req.user.id;
+  const userSupabase = getAuthenticatedSupabase(req.userToken);
   const { id } = req.params;
 
   // Verify ownership first
-  const { data: checkData, error: checkError } = await supabase
+  const { data: checkData, error: checkError } = await userSupabase
     .from('tasks')
     .select('category')
     .eq('id', id)
@@ -290,7 +308,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
     return res.status(403).json({ error: 'Unauthorized to delete this task' });
   }
 
-  const { error } = await supabase
+  const { error } = await userSupabase
     .from('tasks')
     .delete()
     .eq('id', id);
@@ -413,12 +431,13 @@ const assistantTools = [{
 }];
 
 // --- Helper: Execute tool calls against the database ---
-async function executeToolCall(fc, userId) {
+async function executeToolCall(fc, userId, userToken) {
   const { name, args } = fc;
+  const userSupabase = getAuthenticatedSupabase(userToken);
 
   if (name === 'create_calendar_event') {
     const cat = `${userId}:AI Scheduler`;
-    const { data, error } = await supabase.from('tasks')
+    const { data, error } = await userSupabase.from('tasks')
       .insert([{ title: args.title, date: args.date, priority: 'Important', completed: false, duration: '1h', category: cat }])
       .select();
     if (error) return { success: false, error: error.message };
@@ -426,7 +445,7 @@ async function executeToolCall(fc, userId) {
   }
 
   if (name === 'query_user_tasks') {
-    let query = supabase.from('tasks').select('*').order('date', { ascending: true });
+    let query = userSupabase.from('tasks').select('*').order('date', { ascending: true });
     if (args.date_from) query = query.gte('date', args.date_from);
     if (args.date_to) query = query.lte('date', args.date_to);
     const { data, error } = await query;
@@ -439,21 +458,21 @@ async function executeToolCall(fc, userId) {
   }
 
   if (name === 'update_task') {
-    const { data: chk } = await supabase.from('tasks').select('category, title').eq('id', args.task_id).single();
+    const { data: chk } = await userSupabase.from('tasks').select('category, title').eq('id', args.task_id).single();
     if (!chk || !chk.category.startsWith(`${userId}:`)) return { success: false, error: 'Task not found' };
     const updates = {};
     if (args.new_title) updates.title = args.new_title;
     if (args.new_date) updates.date = args.new_date;
     if (args.completed !== undefined) updates.completed = args.completed;
-    const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).select();
+    const { data, error } = await userSupabase.from('tasks').update(updates).eq('id', args.task_id).select();
     if (error) return { success: false, error: error.message };
     return { success: true, task: data[0], old_title: chk.title };
   }
 
   if (name === 'delete_task') {
-    const { data: chk } = await supabase.from('tasks').select('category, title').eq('id', args.task_id).single();
+    const { data: chk } = await userSupabase.from('tasks').select('category, title').eq('id', args.task_id).single();
     if (!chk || !chk.category.startsWith(`${userId}:`)) return { success: false, error: 'Task not found' };
-    const { error } = await supabase.from('tasks').delete().eq('id', args.task_id);
+    const { error } = await userSupabase.from('tasks').delete().eq('id', args.task_id);
     if (error) return { success: false, error: error.message };
     return { success: true, deleted_title: chk.title };
   }
@@ -462,8 +481,9 @@ async function executeToolCall(fc, userId) {
 }
 
 // --- Helper: Get user tasks for context injection ---
-async function getUserTasksContext(userId) {
-  const { data } = await supabase.from('tasks').select('*').order('date', { ascending: true });
+async function getUserTasksContext(userId, userToken) {
+  const userSupabase = getAuthenticatedSupabase(userToken);
+  const { data } = await userSupabase.from('tasks').select('*').order('date', { ascending: true });
   const tasks = (data || [])
     .filter(t => t.category && t.category.startsWith(`${userId}:`))
     .map(t => ({ id: t.id, title: t.title, date: t.date, priority: t.priority, completed: t.completed, category: t.category.substring(userId.length + 1) }));
@@ -555,7 +575,7 @@ app.post('/api/ai/stream', authMiddleware, async (req, res) => {
   }
 
   try {
-    const tasksContext = await getUserTasksContext(userId);
+    const tasksContext = await getUserTasksContext(userId, req.userToken);
     const systemPrompt = buildSystemPrompt(tasksContext, style, language);
     const latestUserMessage = messages[messages.length - 1].content;
 
@@ -604,7 +624,7 @@ app.post('/api/ai/stream', authMiddleware, async (req, res) => {
         console.log(`🛠️ Tool: ${fcName}`, JSON.stringify(fcArgs));
         res.write(`data: ${JSON.stringify({ type: 'tool_call', name: fcName })}\n\n`);
 
-        const toolResult = await executeToolCall({ name: fcName, args: fcArgs }, userId);
+        const toolResult = await executeToolCall({ name: fcName, args: fcArgs }, userId, req.userToken);
 
         if (fcName === 'create_calendar_event') {
           actionType = 'create';
@@ -686,7 +706,7 @@ app.post('/api/ai/stream', authMiddleware, async (req, res) => {
       if (functionCalls && functionCalls.length > 0) {
         const fc = functionCalls[0];
         res.write(`data: ${JSON.stringify({ type: 'tool_call', name: fc.name })}\n\n`);
-        const toolResult = await executeToolCall(fc, userId);
+        const toolResult = await executeToolCall(fc, userId, req.userToken);
         if (fc.name === 'create_calendar_event') { actionType = 'create'; actionPayload = { title: fc.args.title, date: fc.args.date, time: fc.args.time, task: toolResult.task }; }
         else if (fc.name === 'query_user_tasks') { actionType = 'query'; taskList = toolResult.tasks || []; }
         else if (fc.name === 'update_task') { actionType = 'update'; actionPayload = toolResult; }
@@ -736,7 +756,7 @@ app.post('/api/ai/parse', authMiddleware, async (req, res) => {
   }
 
   try {
-    const tasksContext = await getUserTasksContext(userId);
+    const tasksContext = await getUserTasksContext(userId, req.userToken);
     const systemInstruction = buildSystemPrompt(tasksContext);
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
@@ -756,7 +776,7 @@ app.post('/api/ai/parse', authMiddleware, async (req, res) => {
       if (!fcs || fcs.length === 0) break;
       const fc = fcs[0];
       console.log(`🛠️ Tool: ${fc.name}`, JSON.stringify(fc.args));
-      const toolResult = await executeToolCall(fc, userId);
+      const toolResult = await executeToolCall(fc, userId, req.userToken);
       if (fc.name === 'create_calendar_event') { actionType = 'create'; actionPayload = { title: fc.args.title, date: fc.args.date, time: fc.args.time, task: toolResult.task }; }
       else if (fc.name === 'query_user_tasks') { actionType = 'query'; taskList = toolResult.tasks || []; }
       else if (fc.name === 'update_task') { actionType = 'update'; actionPayload = toolResult; }
@@ -838,7 +858,7 @@ app.get('/api/ai/briefing', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const groqApiKey = process.env.GROQ_API_KEY;
 
-  const tasksContext = await getUserTasksContext(userId);
+  const tasksContext = await getUserTasksContext(userId, req.userToken);
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata' });
 

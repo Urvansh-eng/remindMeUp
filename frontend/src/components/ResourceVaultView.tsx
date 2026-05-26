@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, ExternalLink, Video, Clock, Code, Plus, Minus, X, Calendar, ChevronDown } from 'lucide-react';
 
 interface ResourceVaultProps {
@@ -23,8 +23,40 @@ interface Meeting {
 }
 
 const ResourceVaultView: React.FC<ResourceVaultProps> = ({ isSidebarOpen, setIsSidebarOpen }) => {
-  const [certifications, setCertifications] = useState<Certification[]>([]);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [certifications, setCertifications] = useState<Certification[]>(() => {
+    try {
+      const saved = localStorage.getItem('remindmeup_certifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load certifications:", e);
+      return [];
+    }
+  });
+  const [meetings, setMeetings] = useState<Meeting[]>(() => {
+    try {
+      const saved = localStorage.getItem('remindmeup_meetings');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load meetings:", e);
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('remindmeup_certifications', JSON.stringify(certifications));
+    } catch (e) {
+      console.error("Failed to save certifications:", e);
+    }
+  }, [certifications]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('remindmeup_meetings', JSON.stringify(meetings));
+    } catch (e) {
+      console.error("Failed to save meetings:", e);
+    }
+  }, [meetings]);
 
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [certForm, setCertForm] = useState({ name: '', url: '', completed: 0, total: 10 });

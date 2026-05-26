@@ -14,6 +14,9 @@ import {
   parseISO,
   addDays
 } from 'date-fns';
+import { supabase } from '../lib/supabaseClient';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 import { Task } from '../App';
 type Priority = 'Critical' | 'Important' | 'Optional';
@@ -70,9 +73,22 @@ const CalendarView: React.FC<CalendarProps> = ({
     }
   };
 
-  const handleModifyTask = () => {
+  const handleModifyTask = async () => {
     if (selectedTask !== null && editTaskText.trim()) {
-      setTasks(prev => prev.map(t => t.id === selectedTask ? { ...t, title: editTaskText } : t));
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await fetch(`${API_BASE}/api/tasks/${selectedTask}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ title: editTaskText })
+        });
+        setTasks(prev => prev.map(t => t.id === selectedTask ? { ...t, title: editTaskText } : t));
+      } catch (err) {
+        console.error("Failed to modify task:", err);
+      }
       setIsEditModalOpen(false);
     }
   };
@@ -81,9 +97,23 @@ const CalendarView: React.FC<CalendarProps> = ({
     setEditTaskText('');
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     if (selectedTask !== null) {
-      setTasks(prev => prev.filter(t => t.id !== selectedTask));
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const response = await fetch(`${API_BASE}/api/tasks/${selectedTask}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${session?.access_token}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete task from backend');
+        }
+        
+        setTasks(prev => prev.filter(t => t.id !== selectedTask));
+      } catch (err) {
+        console.error("Failed to delete task:", err);
+      }
       setIsEditModalOpen(false);
     }
   };
@@ -349,7 +379,10 @@ const CalendarView: React.FC<CalendarProps> = ({
                               </div>
 
                               <div className="p-1">
-                                <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-brand-crimson hover:bg-brand-crimson/10 transition-colors">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteTask(); }}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-brand-crimson hover:bg-brand-crimson/10 transition-colors"
+                                >
                                   <Trash2 size={12} /> Delete Task
                                 </button>
                               </div>

@@ -71,27 +71,26 @@ const getEmptyProjectColumns = (): Column[] => {
   return getInitialColumns().map(col => ({ ...col, cards: [] }));
 };
 
-let globalProjectBoards: Record<string, Column[]> = {};
-let globalBoard: Column[] = getInitialColumns();
-
 const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, projectId, projectTitle }) => {
-  const [columnsState, setColumnsState] = useState<Column[]>(
-    projectId 
-      ? (globalProjectBoards[projectId] || getEmptyProjectColumns())
-      : globalBoard
-  );
+  const [columnsState, setColumnsState] = useState<Column[]>(() => {
+    try {
+      const saved = localStorage.getItem(`remindmeup_kanban_cols_${projectId || 'global'}`);
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return getEmptyProjectColumns();
+  });
 
   const setColumns = (updater: React.SetStateAction<Column[]>) => {
-    setColumnsState(prev => {
-      const newCols = typeof updater === 'function' ? updater(prev) : updater;
-      if (projectId) {
-        globalProjectBoards[projectId] = newCols;
-      } else {
-        globalBoard = newCols;
-      }
-      return newCols;
-    });
+    setColumnsState(updater);
   };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`remindmeup_kanban_cols_${projectId || 'global'}`, JSON.stringify(columnsState));
+    } catch (error) {
+      console.error("Failed to save kanban cols:", error);
+    }
+  }, [columnsState, projectId]);
 
   const loadTasks = async () => {
     try {
@@ -155,11 +154,15 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
           });
         };
 
-        setColumnsState([
-          { id: 'col-1', title: 'Today', accent: 'amber', cards: sortCards(col1) },
-          { id: 'col-2', title: 'This Week', accent: 'emerald', cards: sortCards(col2) },
-          { id: 'col-3', title: 'Later', accent: 'charcoal', cards: sortCards(col3) }
-        ]);
+        setColumnsState(prev => {
+          const customCols = prev.filter(c => !['col-1', 'col-2', 'col-3'].includes(c.id));
+          return [
+            { id: 'col-1', title: 'Today', accent: 'amber', cards: sortCards(col1) },
+            { id: 'col-2', title: 'This Week', accent: 'emerald', cards: sortCards(col2) },
+            { id: 'col-3', title: 'Later', accent: 'charcoal', cards: sortCards(col3) },
+            ...customCols
+          ];
+        });
       }
     } catch (error) {
       console.error("Failed to load tasks for Kanban:", error);
@@ -181,6 +184,25 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
       return;
     }
 
+    if (!['col-1', 'col-2', 'col-3'].includes(colId)) {
+      const optimisticCard: Card = {
+        id: `temp-${Date.now()}`,
+        title: newCardTitle,
+        priority: 'Optional',
+        isCompleted: false,
+        category: projectTitle || 'General'
+      };
+      setColumnsState(prev => prev.map(col => {
+        if (col.id === colId) {
+          return { ...col, cards: [...col.cards, optimisticCard] };
+        }
+        return col;
+      }));
+      setNewCardTitle('');
+      setAddingToCol(null);
+      return;
+    }
+
     let targetDate = format(MOCK_TODAY, 'yyyy-MM-dd');
     if (colId === 'col-2') {
       targetDate = format(addDays(MOCK_TODAY, 3), 'yyyy-MM-dd');
@@ -197,11 +219,29 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
       category: projectTitle || 'General'
     };
 
+    const optimisticCard: Card = {
+      id: `temp-${Date.now()}`,
+      title: newCardTitle,
+      priority: 'Optional',
+      isCompleted: false,
+      category: projectTitle || 'General',
+      dueDate: targetDate
+    };
+    
+    setColumnsState(prev => prev.map(col => {
+      if (col.id === colId) {
+        return { ...col, cards: [...col.cards, optimisticCard] };
+      }
+      return col;
+    }));
+
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify(newTask)
       });
@@ -251,14 +291,18 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }));
 
     try {
-      await fetch(`${API_BASE}/api/tasks/${cardId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ completed: newCompleted })
-      });
-      loadTasks();
+      if (['col-1', 'col-2', 'col-3'].includes(colId)) {
+        const { data: { session } } = await supabase.auth.getSession();
+        await fetch(`${API_BASE}/api/tasks/${cardId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ completed: newCompleted })
+        });
+        loadTasks();
+      }
     } catch (error) {
       console.error("Failed to toggle card completion:", error);
       loadTasks();
@@ -318,6 +362,24 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     const { cardId, colId: sourceColId } = draggedCard;
     if (sourceColId === targetColId) return;
 
+    setColumns(prev => {
+      const newCols = prev.map(col => ({ ...col, cards: [...col.cards] }));
+      const sourceCol = newCols.find(c => c.id === sourceColId);
+      const targetCol = newCols.find(c => c.id === targetColId);
+      if (!sourceCol || !targetCol) return prev;
+      
+      const cardIndex = sourceCol.cards.findIndex(c => c.id === cardId);
+      if (cardIndex === -1) return prev;
+      
+      const [card] = sourceCol.cards.splice(cardIndex, 1);
+      targetCol.cards.push(card);
+      return newCols;
+    });
+
+    if (!['col-1', 'col-2', 'col-3'].includes(targetColId) && !['col-1', 'col-2', 'col-3'].includes(sourceColId)) {
+      return;
+    }
+
     let newDate = format(MOCK_TODAY, 'yyyy-MM-dd');
     if (targetColId === 'col-2') {
       newDate = format(addDays(MOCK_TODAY, 3), 'yyyy-MM-dd');
@@ -326,10 +388,12 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_BASE}/api/tasks/${cardId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ date: newDate })
       });
@@ -347,14 +411,20 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     
     const col = columnsState.find(c => c.id === colId);
     if (col) {
-      for (const card of col.cards) {
-        try {
-          await fetch(`${API_BASE}/api/tasks/${card.id}`, {
-            method: 'DELETE'
-          });
-        } catch (error) {
-          console.error("Failed to delete card:", card.id, error);
+      if (['col-1', 'col-2', 'col-3'].includes(colId)) {
+        for (const card of col.cards) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            await fetch(`${API_BASE}/api/tasks/${card.id}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+          } catch (error) {
+            console.error("Failed to delete card:", card.id, error);
+          }
         }
+      } else {
+        setColumns(prev => prev.map(c => c.id === colId ? { ...c, cards: [] } : c));
       }
     }
 
