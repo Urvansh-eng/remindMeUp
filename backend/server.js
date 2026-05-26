@@ -43,11 +43,7 @@ const authMiddleware = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
 
-  // Developer Bypass handling
-  if (token === 'dev-bypass-user-12345') {
-    req.user = { id: 'dev-bypass-user-12345', email: 'developer@remindmeup.ai' };
-    return next();
-  }
+
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);

@@ -68,7 +68,7 @@ const AIAssistantView: React.FC<AIProps> = ({
     const loadChat = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || 'dev-bypass-user-12345';
+        const token = session?.access_token;
         const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -94,7 +94,7 @@ const AIAssistantView: React.FC<AIProps> = ({
   const persistMessage = async (role: string, content: string, metadata?: any) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -159,7 +159,7 @@ const AIAssistantView: React.FC<AIProps> = ({
     try {
       setIsTranscribing(true);
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       const formData = new FormData();
       formData.append('file', blob, 'audio.webm');
       
@@ -203,7 +203,7 @@ const AIAssistantView: React.FC<AIProps> = ({
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
 
       // Build chat history
       const chatHistory = messages
@@ -336,7 +336,7 @@ const AIAssistantView: React.FC<AIProps> = ({
       const deleteTask = async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token || 'dev-bypass-user-12345';
+          const token = session?.access_token;
           await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${msg.actionPayload.task.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -359,7 +359,7 @@ const AIAssistantView: React.FC<AIProps> = ({
     setMessages([messages[0]]);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }

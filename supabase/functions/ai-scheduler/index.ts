@@ -14,7 +14,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let supabaseAdmin: any = null;
-  let userId = 'dev-bypass-user-12345';
+  let userId = null;
   let prompt = '';
   let timezone = 'Asia/Kolkata';
 
@@ -37,8 +37,7 @@ Deno.serve(async (req: Request) => {
     });
 
     let user;
-    if (token === 'dev-bypass-user-12345') {
-      user = { id: 'dev-bypass-user-12345', email: 'developer@remindmeup.ai' };
+    ;
     } else {
       const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
       if (authError || !authUser) {

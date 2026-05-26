@@ -28,18 +28,6 @@ const LoginView: React.FC<LoginProps> = ({ onBypass }) => {
     }
   };
 
-  const handleDeveloperBypass = () => {
-    // Create a mock authenticated user session for rapid development
-    const mockUser = {
-      id: "dev-bypass-user-12345",
-      email: "developer@remindmeup.ai",
-      user_metadata: {
-        full_name: "RemindMeUp Developer",
-        avatar_url: "https://api.dicebear.com/7.x/bottts/svg?seed=RemindMeUp"
-      }
-    };
-    onBypass(mockUser);
-  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#09090b] relative overflow-hidden px-4 select-none">
@@ -107,20 +95,7 @@ const LoginView: React.FC<LoginProps> = ({ onBypass }) => {
             <span>Continue with GitHub</span>
           </button>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-2 w-full">
-            <div className="h-[1px] bg-zinc-800/80 flex-1"></div>
-            <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-600">Developer</span>
-            <div className="h-[1px] bg-zinc-800/80 flex-1"></div>
-          </div>
 
-          {/* Dev Bypass Button */}
-          <button
-            onClick={handleDeveloperBypass}
-            className="w-full py-3 px-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-sm font-semibold text-indigo-400 transition-all flex items-center justify-center gap-2 active:scale-[0.99] cursor-pointer"
-          >
-            <span>Developer Sandbox Bypass</span>
-          </button>
         </div>
 
         {/* Footer info */}

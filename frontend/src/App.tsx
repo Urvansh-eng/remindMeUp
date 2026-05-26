@@ -478,7 +478,7 @@ function App() {
   // Complete a task from a notification action
   const handleCompleteTask = async (taskId: number) => {
     try {
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       await fetch(`${API_BASE}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: {
@@ -576,7 +576,7 @@ function App() {
   // Fetch tasks from Supabase via the backend API
   const fetchTasks = async () => {
     try {
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       const res = await fetch(`${API_BASE}/api/tasks`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -623,7 +623,7 @@ function App() {
   // Configure global fetch authorization interceptor
   useEffect(() => {
     if (!session) return;
-    const token = session.access_token || 'dev-bypass-user-12345';
+    const token = session.access_token;
     
     const originalFetch = window.fetch;
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

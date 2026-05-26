@@ -35,7 +35,7 @@ const DashboardView: React.FC<DashboardProps> = ({
     const loadTasks = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || 'dev-bypass-user-12345';
+        const token = session?.access_token;
 
         const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
           headers: {
@@ -65,7 +65,7 @@ const DashboardView: React.FC<DashboardProps> = ({
       try {
         setBriefingLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || 'dev-bypass-user-12345';
+        const token = session?.access_token;
         const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -306,7 +306,7 @@ const DashboardView: React.FC<DashboardProps> = ({
                       setBriefingLoading(true);
                       try {
                         const { data: { session } } = await supabase.auth.getSession();
-                        const token = session?.access_token || 'dev-bypass-user-12345';
+                        const token = session?.access_token;
                         const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, { headers: { 'Authorization': `Bearer ${token}` } });
                         const data = await res.json();
                         if (data.briefing) setAiBriefing(data.briefing);

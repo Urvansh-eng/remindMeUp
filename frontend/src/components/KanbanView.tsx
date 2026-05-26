@@ -94,7 +94,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
   const loadTasks = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
 
       const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
         headers: {

@@ -135,7 +135,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
     const fetchSupabaseCount = async () => {
       try {
-        const token = session?.access_token || 'dev-bypass-user-12345';
+        const token = session?.access_token;
         const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -209,7 +209,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     
     setIsDeletingAccount(true);
     try {
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       
       // Clear SQLite database tasks
       await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/clear-all`, {
@@ -237,7 +237,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const handleClearCompletedTasks = async () => {
     setIsClearingTasks(true);
     try {
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/completed`, {
         method: 'DELETE',
         headers: {
@@ -262,7 +262,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   // Tasks Export engine
   const handleExportTasks = async (format: 'csv' | 'json') => {
     try {
-      const token = session?.access_token || 'dev-bypass-user-12345';
+      const token = session?.access_token;
       const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`
