@@ -726,7 +726,7 @@ function App() {
   }
 
   if (!session) {
-    return <LoginView onBypass={(mockUser) => setSession({ user: mockUser })} />;
+    return <LoginView />;
   }
 
   return (

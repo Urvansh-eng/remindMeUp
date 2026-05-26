@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AlertCircle } from 'lucide-react';
 
-interface LoginProps {
-  onBypass: (user: any) => void;
-}
-
-const LoginView: React.FC<LoginProps> = ({ onBypass }) => {
+const LoginView: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
 
