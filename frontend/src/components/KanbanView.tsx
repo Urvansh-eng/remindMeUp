@@ -3,6 +3,8 @@ import { Menu, Plus, MoreHorizontal, MessageSquare, Paperclip, Clock, AlignLeft,
 import { parseISO, differenceInDays, addDays, format } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 const MOCK_TODAY = new Date('2026-06-15');
 
 interface KanbanProps {
@@ -96,7 +98,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+      const response = await fetch(`${API_BASE}/api/tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -196,7 +198,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     };
 
     try {
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+      const response = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -249,7 +251,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }));
 
     try {
-      await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${cardId}`, {
+      await fetch(`${API_BASE}/api/tasks/${cardId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -324,7 +326,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }
 
     try {
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${cardId}`, {
+      const response = await fetch(`${API_BASE}/api/tasks/${cardId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -347,7 +349,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     if (col) {
       for (const card of col.cards) {
         try {
-          await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${card.id}`, {
+          await fetch(`${API_BASE}/api/tasks/${card.id}`, {
             method: 'DELETE'
           });
         } catch (error) {

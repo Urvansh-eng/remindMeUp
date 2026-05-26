@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Mic, Send, Bot, User, Sparkles, Check, X, Loader2, Volume2, Trash2, Search, CheckSquare, Square, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface AIProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
@@ -69,7 +71,7 @@ const AIAssistantView: React.FC<AIProps> = ({
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
+        const res = await fetch(`${API_BASE}/api/chat/messages`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -95,7 +97,7 @@ const AIAssistantView: React.FC<AIProps> = ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
+      fetch(`${API_BASE}/api/chat/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ role, content, metadata })
@@ -164,7 +166,7 @@ const AIAssistantView: React.FC<AIProps> = ({
       formData.append('file', blob, 'audio.webm');
       
       // Pass configurations to assist downstream offline/fallback transcriptions
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/transcribe?sensitivity=${voiceSensitivity}&language=${assistantLanguage}`, {
+      const response = await fetch(`${API_BASE}/api/ai/transcribe?sensitivity=${voiceSensitivity}&language=${assistantLanguage}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -212,7 +214,7 @@ const AIAssistantView: React.FC<AIProps> = ({
       chatHistory.push({ role: 'user', content: userText });
 
       // SSE streaming request - now integrates style and language options
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/stream`, {
+      const response = await fetch(`${API_BASE}/api/ai/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -337,7 +339,7 @@ const AIAssistantView: React.FC<AIProps> = ({
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token;
-          await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${msg.actionPayload.task.id}`, {
+          await fetch(`${API_BASE}/api/tasks/${msg.actionPayload.task.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -360,7 +362,7 @@ const AIAssistantView: React.FC<AIProps> = ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
+      fetch(`${API_BASE}/api/chat/messages`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

@@ -629,7 +629,7 @@ function App() {
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       let targetUrl = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
       
-      if (targetUrl.startsWith(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api`)) {
+      if (targetUrl.startsWith(`${API_BASE}/api`)) {
         init = init || {};
         const isFormData = init.body instanceof FormData;
         const newHeaders: Record<string, string> = {

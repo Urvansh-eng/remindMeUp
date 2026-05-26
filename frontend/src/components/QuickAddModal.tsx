@@ -4,6 +4,8 @@ import { Task } from '../App';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface QuickAddModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -79,7 +81,7 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/parse`, {
+      const response = await fetch(`${API_BASE}/api/ai/parse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +136,7 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+      const response = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

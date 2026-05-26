@@ -17,6 +17,8 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { AppSettings } from '../App';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface SettingsViewProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
@@ -136,7 +138,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     const fetchSupabaseCount = async () => {
       try {
         const token = session?.access_token;
-        const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+        const response = await fetch(`${API_BASE}/api/tasks`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -212,7 +214,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       const token = session?.access_token;
       
       // Clear SQLite database tasks
-      await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/clear-all`, {
+      await fetch(`${API_BASE}/api/tasks/clear-all`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -238,7 +240,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setIsClearingTasks(true);
     try {
       const token = session?.access_token;
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/completed`, {
+      const response = await fetch(`${API_BASE}/api/tasks/completed`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -263,7 +265,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const handleExportTasks = async (format: 'csv' | 'json') => {
     try {
       const token = session?.access_token;
-      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+      const response = await fetch(`${API_BASE}/api/tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 
 import { AppNotification } from '../App';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface DashboardProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
@@ -37,7 +39,7 @@ const DashboardView: React.FC<DashboardProps> = ({
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
+        const response = await fetch(`${API_BASE}/api/tasks`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -66,7 +68,7 @@ const DashboardView: React.FC<DashboardProps> = ({
         setBriefingLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, {
+        const res = await fetch(`${API_BASE}/api/ai/briefing`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -138,7 +140,7 @@ const DashboardView: React.FC<DashboardProps> = ({
     setTodaysTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updatedCompleted } : t));
 
     try {
-      await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${task.id}`, {
+      await fetch(`${API_BASE}/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -307,7 +309,7 @@ const DashboardView: React.FC<DashboardProps> = ({
                       try {
                         const { data: { session } } = await supabase.auth.getSession();
                         const token = session?.access_token;
-                        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, { headers: { 'Authorization': `Bearer ${token}` } });
+                        const res = await fetch(`${API_BASE}/api/ai/briefing`, { headers: { 'Authorization': `Bearer ${token}` } });
                         const data = await res.json();
                         if (data.briefing) setAiBriefing(data.briefing);
                       } catch (e) {} finally { setBriefingLoading(false); }
