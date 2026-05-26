@@ -96,7 +96,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || 'dev-bypass-user-12345';
 
-      const response = await fetch('http://localhost:4000/api/tasks', {
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -196,7 +196,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     };
 
     try {
-      const response = await fetch('http://localhost:4000/api/tasks', {
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -249,7 +249,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }));
 
     try {
-      await fetch(`http://localhost:4000/api/tasks/${cardId}`, {
+      await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${cardId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -324,7 +324,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     }
 
     try {
-      const response = await fetch(`http://localhost:4000/api/tasks/${cardId}`, {
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${cardId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -347,7 +347,7 @@ const KanbanView: React.FC<KanbanProps> = ({ isSidebarOpen, setIsSidebarOpen, pr
     if (col) {
       for (const card of col.cards) {
         try {
-          await fetch(`http://localhost:4000/api/tasks/${card.id}`, {
+          await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${card.id}`, {
             method: 'DELETE'
           });
         } catch (error) {

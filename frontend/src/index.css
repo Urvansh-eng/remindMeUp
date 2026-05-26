@@ -69,3 +69,32 @@
     scrollbar-width: none;
   }
 }
+
+:root {
+  --accent-color: #6366f1;
+}
+
+.text-accent {
+  color: var(--accent-color) !important;
+}
+
+.bg-accent {
+  background-color: var(--accent-color) !important;
+}
+
+.border-accent {
+  border-color: var(--accent-color) !important;
+}
+
+.bg-accent-translucent {
+  background-color: color-mix(in srgb, var(--accent-color) 10%, transparent) !important;
+}
+
+.bg-accent-translucent-20 {
+  background-color: color-mix(in srgb, var(--accent-color) 20%, transparent) !important;
+}
+
+.border-accent-translucent {
+  border-color: color-mix(in srgb, var(--accent-color) 20%, transparent) !important;
+}
+

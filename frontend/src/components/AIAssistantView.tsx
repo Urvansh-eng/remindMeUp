@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Mic, Send, Bot, User, Sparkles, Check, X, Loader2, AlertTriangle, Volume2, Trash2, Search, CheckSquare, Square, Calendar, Clock, ArrowRight } from 'lucide-react';
+import { Menu, Mic, Send, Bot, User, Sparkles, Check, X, Loader2, Volume2, Trash2, Search, CheckSquare, Square, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface AIProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
   onTaskCreated?: () => void;
+  assistantLanguage?: "english" | "hinglish" | "auto";
+  voiceSensitivity?: "low" | "medium" | "high";
+  geminiStyle?: "concise" | "detailed";
 }
 
 interface TaskItem {
@@ -31,7 +34,14 @@ interface Message {
   parsedTask?: { title: string; date: string; time: string };
 }
 
-const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, onTaskCreated }) => {
+const AIAssistantView: React.FC<AIProps> = ({ 
+  isSidebarOpen, 
+  setIsSidebarOpen, 
+  onTaskCreated,
+  assistantLanguage = "auto",
+  voiceSensitivity = "medium",
+  geminiStyle = "detailed"
+}) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -43,7 +53,6 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
   const [isParsing, setIsParsing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [chatLoaded, setChatLoaded] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -60,7 +69,7 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || 'dev-bypass-user-12345';
-        const res = await fetch('http://localhost:4000/api/chat/messages', {
+        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -77,7 +86,6 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
       } catch (e) {
         // Chat persistence not available — silent fallback
       }
-      setChatLoaded(true);
     };
     loadChat();
   }, []);
@@ -87,7 +95,7 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || 'dev-bypass-user-12345';
-      fetch('http://localhost:4000/api/chat/messages', {
+      fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ role, content, metadata })
@@ -95,12 +103,29 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
     } catch (e) { /* silent */ }
   };
 
-  // Voice recording
+  // Voice recording with premium dynamic gain Web Audio API routing
   const startVoiceRecording = async () => {
     try {
       audioChunksRef.current = [];
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      
+      // Route through Web Audio API Gain Node to apply settings sensitivity
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      const source = audioContext.createMediaStreamSource(stream);
+      const gainNode = audioContext.createGain();
+      
+      let gainVal = 1.0;
+      if (voiceSensitivity === 'low') gainVal = 0.5;
+      if (voiceSensitivity === 'high') gainVal = 2.0;
+      
+      gainNode.gain.setValueAtTime(gainVal, audioContext.currentTime);
+      
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(gainNode);
+      gainNode.connect(destination);
+      
+      const mediaRecorder = new MediaRecorder(destination.stream);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -108,9 +133,10 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         await uploadAudioForTranscription(audioBlob);
         stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
       };
 
       mediaRecorder.start();
@@ -135,8 +161,10 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || 'dev-bypass-user-12345';
       const formData = new FormData();
-      formData.append('file', blob, 'audio.wav');
-      const response = await fetch('http://localhost:4000/api/ai/transcribe', {
+      formData.append('file', blob, 'audio.webm');
+      
+      // Pass configurations to assist downstream offline/fallback transcriptions
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/transcribe?sensitivity=${voiceSensitivity}&language=${assistantLanguage}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -183,14 +211,18 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'assistant', content: msg.text }));
       chatHistory.push({ role: 'user', content: userText });
 
-      // SSE streaming request
-      const response = await fetch('http://localhost:4000/api/ai/stream', {
+      // SSE streaming request - now integrates style and language options
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ messages: chatHistory })
+        body: JSON.stringify({ 
+          messages: chatHistory,
+          style: geminiStyle,
+          language: assistantLanguage
+        })
       });
 
       if (!response.ok || !response.body) throw new Error("Stream failed");
@@ -305,7 +337,7 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token || 'dev-bypass-user-12345';
-          await fetch(`http://localhost:4000/api/tasks/${msg.actionPayload.task.id}`, {
+          await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${msg.actionPayload.task.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -328,7 +360,7 @@ const AIAssistantView: React.FC<AIProps> = ({ isSidebarOpen, setIsSidebarOpen, o
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || 'dev-bypass-user-12345';
-      fetch('http://localhost:4000/api/chat/messages', {
+      fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/chat/messages`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

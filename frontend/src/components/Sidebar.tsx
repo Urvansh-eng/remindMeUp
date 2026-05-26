@@ -23,11 +23,13 @@ interface SidebarProps {
   activeProjectId: string | null;
   session: any;
   onLogout: () => void;
+  onSettingsClick?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   isOpen, setIsOpen, activeView, setActiveView, onQuickAdd, 
-  projects, setProjects, activeProjectId, session, onLogout
+  projects, setProjects, activeProjectId, session, onLogout,
+  onSettingsClick
 }) => {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
@@ -123,6 +125,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               <Bot size={16} className={activeView === 'ai' ? 'text-blue-400' : 'text-zinc-500'} />
               AI Assistant
             </button>
+            <button 
+              onClick={() => setActiveView('settings')}
+              className={`nav-item ${activeView === 'settings' ? 'active' : ''}`}
+            >
+              <Settings size={16} className={activeView === 'settings' ? 'text-zinc-100' : 'text-zinc-500'} />
+              Settings
+            </button>
           </nav>
         </div>
 
@@ -182,7 +191,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
         
         <div className="flex items-center gap-2">
-          <button className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800 text-[11px] font-bold text-zinc-400 hover:text-zinc-100 transition-colors shadow-sm cursor-pointer">
+          <button 
+            onClick={onSettingsClick}
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800 text-[11px] font-bold text-zinc-400 hover:text-zinc-100 transition-colors shadow-sm cursor-pointer"
+          >
             <Settings size={13} />
             Settings
           </button>

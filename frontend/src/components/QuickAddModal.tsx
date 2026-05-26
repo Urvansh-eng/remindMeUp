@@ -9,28 +9,64 @@ interface QuickAddModalProps {
   onClose: () => void;
   initialDate?: string;
   onAddTask?: (task: Omit<Task, 'id'>) => void;
+  defaultReminderOffset?: number;
+  defaultPriority?: "low" | "medium" | "high";
+  defaultCategory?: "work" | "personal" | "other";
 }
 
 type Priority = 'Critical' | 'Important' | 'Optional';
 
-const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, initialDate, onAddTask }) => {
+const getMappedPriority = (p?: string): Priority => {
+  if (p === 'low') return 'Optional';
+  if (p === 'high') return 'Critical';
+  return 'Important';
+};
+
+const getMappedCategory = (c?: string): string => {
+  if (c === 'work') return 'Work';
+  if (c === 'personal') return 'Personal';
+  return 'General';
+};
+
+const QuickAddModal: React.FC<QuickAddModalProps> = ({ 
+  isOpen, onClose, initialDate, onAddTask, defaultReminderOffset, defaultPriority, defaultCategory
+}) => {
   const [nlpPrompt, setNlpPrompt] = useState('');
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(initialDate || format(new Date(), 'yyyy-MM-dd'));
   const [time, setTime] = useState('12:00');
-  const [priority, setPriority] = useState<Priority>('Important');
-  const [category, setCategory] = useState('General');
+  const [priority, setPriority] = useState<Priority>(getMappedPriority(defaultPriority));
+  const [category, setCategory] = useState(getMappedCategory(defaultCategory));
   const [duration] = useState('1h');
+  const [reminderOffset, setReminderOffset] = useState(defaultReminderOffset || 10);
   
   // UI states
   const [isParsing, setIsParsing] = useState(false);
   const [aiSuggestionMessage, setAiSuggestionMessage] = useState<string | null>(null);
   const [hasExtracted, setHasExtracted] = useState(false);
 
-  // Sync state if initialDate changes
+  // Sync state if initialDate or defaultReminderOffset changes
   useEffect(() => {
     if (initialDate) setDate(initialDate);
   }, [initialDate]);
+
+  useEffect(() => {
+    if (defaultReminderOffset !== undefined) {
+      setReminderOffset(defaultReminderOffset);
+    }
+  }, [defaultReminderOffset]);
+
+  useEffect(() => {
+    if (defaultPriority) {
+      setPriority(getMappedPriority(defaultPriority));
+    }
+  }, [defaultPriority]);
+
+  useEffect(() => {
+    if (defaultCategory) {
+      setCategory(getMappedCategory(defaultCategory));
+    }
+  }, [defaultCategory]);
 
   const handleAIParse = async () => {
     if (!nlpPrompt.trim()) return;
@@ -40,10 +76,14 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, initialD
     setHasExtracted(false);
 
     try {
-      const response = await fetch('http://localhost:4000/api/ai/parse', {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || 'dev-bypass-user-12345';
+
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/parse`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ prompt: nlpPrompt })
       });
@@ -79,20 +119,22 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, initialD
   const handleAddTask = async () => {
     if (!title.trim()) return;
     
+    const mergedDate = time ? `${date}T${time}:00` : date;
     const newTask = {
       title: title.trim(),
-      date: date || format(new Date(), 'yyyy-MM-dd'),
+      date: mergedDate || format(new Date(), 'yyyy-MM-dd'),
       priority: priority,
       category: category,
       duration: duration,
-      completed: false
+      completed: false,
+      reminder_offset_minutes: reminderOffset
     };
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || 'dev-bypass-user-12345';
 
-      const response = await fetch('http://localhost:4000/api/tasks', {
+      const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,6 +300,27 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, initialD
                     {p}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Custom Reminder Offset Timing Slider */}
+            <div className="grid grid-cols-3 items-center gap-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-zinc-400">Reminder Timing</span>
+                <span className="text-[9px] text-zinc-500 font-medium leading-none mt-1">Notify before task starts</span>
+              </div>
+              <div className="col-span-2 flex flex-col gap-2">
+                <input 
+                  type="range"
+                  min="1"
+                  max="60"
+                  value={reminderOffset}
+                  onChange={(e) => setReminderOffset(parseInt(e.target.value, 10))}
+                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none"
+                />
+                <span className="text-[10px] font-bold text-indigo-400">
+                  Notify me {reminderOffset} minutes before
+                </span>
               </div>
             </div>
           </div>

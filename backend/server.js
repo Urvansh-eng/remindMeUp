@@ -15,7 +15,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -85,6 +85,7 @@ app.get('/api/tasks', async (req, res) => {
     .filter(task => task.category && task.category.startsWith(`${userId}:`))
     .map(task => ({
       ...task,
+      reminder_offset_minutes: task.reminder_offset_minutes !== undefined ? task.reminder_offset_minutes : 10,
       category: task.category.substring(userId.length + 1) // Strip the user prefix
     }));
 
@@ -94,15 +95,29 @@ app.get('/api/tasks', async (req, res) => {
 // Create a new task for the logged in user
 app.post('/api/tasks', async (req, res) => {
   const userId = req.user.id;
-  const { title, priority, date, completed, duration, category } = req.body;
+  const { title, priority, date, completed, duration, category, reminder_offset_minutes } = req.body;
 
   // Prefix the category with user's ID to isolate tasks
   const prefixedCategory = `${userId}:${category || 'General'}`;
+  const offset = typeof reminder_offset_minutes === 'number' ? reminder_offset_minutes : 10;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('tasks')
-    .insert([{ title, priority, date, completed, duration, category: prefixedCategory }])
+    .insert([{ title, priority, date, completed, duration, category: prefixedCategory, reminder_offset_minutes: offset }])
     .select();
+
+  if (error) {
+    if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+      console.warn("⚠️ Column 'reminder_offset_minutes' does not exist in Supabase tasks table yet. Inserting without it.");
+      const fallbackResult = await supabase
+        .from('tasks')
+        .insert([{ title, priority, date, completed, duration, category: prefixedCategory }])
+        .select();
+      
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
+  }
 
   if (error) {
     console.error("🔴 Supabase POST Error:", error);
@@ -112,6 +127,7 @@ app.post('/api/tasks', async (req, res) => {
   // Strip prefix before sending back to UI
   const returnedTask = {
     ...data[0],
+    reminder_offset_minutes: data[0].reminder_offset_minutes !== undefined ? data[0].reminder_offset_minutes : offset,
     category: data[0].category.substring(userId.length + 1)
   };
 
@@ -139,11 +155,28 @@ app.put('/api/tasks/:id', async (req, res) => {
     updates.category = `${userId}:${updates.category}`;
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('tasks')
     .update(updates)
     .eq('id', id)
     .select();
+
+  if (error) {
+    if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+      console.warn("⚠️ Column 'reminder_offset_minutes' does not exist in Supabase tasks table yet. Updating without it.");
+      const fallbackUpdates = { ...updates };
+      delete fallbackUpdates.reminder_offset_minutes;
+      
+      const fallbackResult = await supabase
+        .from('tasks')
+        .update(fallbackUpdates)
+        .eq('id', id)
+        .select();
+      
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
+  }
 
   if (error) {
     return res.status(500).json({ error: error.message });
@@ -151,10 +184,84 @@ app.put('/api/tasks/:id', async (req, res) => {
 
   const returnedTask = {
     ...data[0],
+    reminder_offset_minutes: data[0].reminder_offset_minutes !== undefined ? data[0].reminder_offset_minutes : (updates.reminder_offset_minutes || 10),
     category: data[0].category.substring(userId.length + 1)
   };
 
   res.json(returnedTask);
+});
+
+
+// Clear completed tasks for the logged in user
+app.delete('/api/tasks/completed', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const { data, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, category, completed');
+
+    if (fetchError) {
+      return res.status(500).json({ error: fetchError.message });
+    }
+
+    const completedIds = (data || [])
+      .filter(task => task.category && task.category.startsWith(`${userId}:`) && (task.completed === true || task.completed === 1 || task.isCompleted === true))
+      .map(task => task.id);
+
+    if (completedIds.length === 0) {
+      return res.status(200).json({ message: 'No completed tasks found to clear' });
+    }
+
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', completedIds);
+
+    if (deleteError) {
+      return res.status(500).json({ error: deleteError.message });
+    }
+
+    res.status(200).json({ success: true, clearedCount: completedIds.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear all tasks for a specific user (used when deleting account)
+app.delete('/api/tasks/clear-all', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const { data, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, category');
+
+    if (fetchError) {
+      return res.status(500).json({ error: fetchError.message });
+    }
+
+    const allIds = (data || [])
+      .filter(task => task.category && task.category.startsWith(`${userId}:`))
+      .map(task => task.id);
+
+    if (allIds.length === 0) {
+      return res.status(200).json({ message: 'No tasks found to clear' });
+    }
+
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', allIds);
+
+    if (deleteError) {
+      return res.status(500).json({ error: deleteError.message });
+    }
+
+    res.status(200).json({ success: true, clearedCount: allIds.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Delete a task (ensuring user owns it)
@@ -185,9 +292,15 @@ app.delete('/api/tasks/:id', async (req, res) => {
 });
 
 // --- GROQ WHISPER-LARGE-V3 VOICE TRANSCRIPTION ENDPOINT ---
-app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/api/ai/transcribe', authMiddleware, upload.single('file'), async (req, res) => {
   try {
+    console.log('🎤 Received transcription request');
+    console.log('Request Headers:', req.headers);
+    console.log('Request File:', req.file);
+    console.log('Request Body:', req.body);
+
     if (!req.file) {
+      console.warn("⚠️ No file in request");
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
@@ -198,22 +311,19 @@ app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
       return res.json({ text: "Kal sham ko 5 baje client call meeting scheduled krdo" });
     }
 
-    // Call Groq API via reliable npm form-data package to guarantee boundaries
-    const formData = new FormData();
-    formData.append('file', req.file.buffer, {
-      filename: 'audio.webm',
-      contentType: req.file.mimetype || 'audio/webm'
-    });
-    formData.append('model', 'whisper-large-v3');
-    formData.append('language', 'hi'); // Optimized for Hinglish/Hindi audio inputs!
+    // Call Groq Whisper API using standard native global FormData and Blob
+    const nativeFormData = new global.FormData();
+    const audioBlob = new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/webm' });
+    nativeFormData.append('file', audioBlob, 'audio.webm');
+    nativeFormData.append('model', 'whisper-large-v3');
+    nativeFormData.append('response_format', 'json');
 
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-        ...formData.getHeaders()
+        'Authorization': `Bearer ${groqApiKey}`
       },
-      body: formData
+      body: nativeFormData
     });
 
     if (!response.ok) {
@@ -223,7 +333,8 @@ app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
     }
 
     const result = await response.json();
-    res.json({ text: result.text });
+    console.log('🎤 Transcribed:', result.text);
+    res.json({ text: result.text || '' });
 
   } catch (err) {
     console.error("Transcription Handler Error:", err);
@@ -351,10 +462,24 @@ async function getUserTasksContext(userId) {
 }
 
 // --- Helper: Build system instruction ---
-function buildSystemPrompt(tasksContext) {
+function buildSystemPrompt(tasksContext, style, language) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata' });
   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+
+  let styleInstruction = "Keep your responses professional and clean.";
+  if (style === 'concise') {
+    styleInstruction = "Keep all responses under 3 sentences.";
+  } else if (style === 'detailed') {
+    styleInstruction = "Provide thorough, structured responses.";
+  }
+
+  let languageInstruction = "You MUST respond ONLY in English or Hinglish (Hindi words written in Roman script mixed with English). NEVER respond in pure Hindi, Devanagari script, or any other language.";
+  if (language === 'english') {
+    languageInstruction = "You MUST respond ONLY in English. Do not use Hinglish or any other languages.";
+  } else if (language === 'hinglish') {
+    languageInstruction = "You MUST respond ONLY in Hinglish (Hindi words written in Roman script mixed with English). Do not use pure English or other languages.";
+  }
 
   return `You are Elevate AI, a versatile personal productivity assistant inside RemindMeUp.
 
@@ -377,8 +502,9 @@ RULES:
 - For updates/deletes: use [ID:xxx] from the schedule above
 - For general chat: respond naturally without tools
 - Be concise, warm, and professional
-- Support English, Hindi, and Hinglish. Match the user's language style.
-- "kal" = tomorrow, "parso" = day after tomorrow, "aaj" = today
+- LANGUAGE RULE: ${languageInstruction}
+- STYLE RULE: ${styleInstruction}
+- Understand Hindi/Hinglish input: "kal" = tomorrow, "parso" = day after tomorrow, "aaj" = today
 - Do NOT guess AM/PM — always ask if ambiguous`;
 }
 
@@ -396,7 +522,7 @@ const groqTools = [
 
 app.post('/api/ai/stream', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const { messages } = req.body;
+  const { messages, style, language } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Messages array is required' });
@@ -420,7 +546,7 @@ app.post('/api/ai/stream', authMiddleware, async (req, res) => {
 
   try {
     const tasksContext = await getUserTasksContext(userId);
-    const systemPrompt = buildSystemPrompt(tasksContext);
+    const systemPrompt = buildSystemPrompt(tasksContext, style, language);
     const latestUserMessage = messages[messages.length - 1].content;
 
     let actionType = 'chat';
@@ -581,10 +707,14 @@ app.post('/api/ai/stream', authMiddleware, async (req, res) => {
 // =====================================================================
 app.post('/api/ai/parse', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const { messages } = req.body;
+  let { messages, prompt } = req.body;
+
+  if (prompt && (!messages || !Array.isArray(messages))) {
+    messages = [{ role: 'user', content: prompt }];
+  }
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'Messages array is required' });
+    return res.status(400).json({ error: 'Messages array or prompt is required' });
   }
 
   const latestUserMessage = messages[messages.length - 1].content;
@@ -624,7 +754,20 @@ app.post('/api/ai/parse', authMiddleware, async (req, res) => {
       result = (await chat.sendMessage([{ functionResponse: { name: fc.name, response: { result: toolResult } } }])).response;
     }
 
-    return res.json({ ai_reply: result.text(), action_type: actionType, action_payload: actionPayload, task_list: taskList });
+    const responseObj = { 
+      ai_reply: result.text(), 
+      action_type: actionType, 
+      action_payload: actionPayload, 
+      task_list: taskList 
+    };
+
+    if (actionType === 'create' && actionPayload) {
+      responseObj.title = actionPayload.title;
+      responseObj.date = actionPayload.date;
+      responseObj.time = actionPayload.time;
+    }
+
+    return res.json(responseObj);
   } catch (error) {
     console.error("❌ Parse Error:", error.message);
     return res.json({ ai_reply: "Processing error. Please try again.", action_type: 'error', action_payload: null, task_list: null });

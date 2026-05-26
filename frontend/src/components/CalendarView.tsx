@@ -24,9 +24,12 @@ interface CalendarProps {
   onDayClick?: (date: string) => void;
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  weekStartDay?: 'sunday' | 'monday';
 }
 
-const CalendarView: React.FC<CalendarProps> = ({ isSidebarOpen, setIsSidebarOpen, onDayClick, tasks, setTasks }) => {
+const CalendarView: React.FC<CalendarProps> = ({ 
+  isSidebarOpen, setIsSidebarOpen, onDayClick, tasks, setTasks, weekStartDay = 'sunday' 
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -36,14 +39,18 @@ const CalendarView: React.FC<CalendarProps> = ({ isSidebarOpen, setIsSidebarOpen
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editTaskText, setEditTaskText] = useState('');
 
+  const weekStartsOn = weekStartDay === 'monday' ? 1 : 0;
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart);
-  const endDate = endOfWeek(monthEnd);
+  const startDate = startOfWeek(monthStart, { weekStartsOn });
+  const endDate = endOfWeek(monthEnd, { weekStartsOn });
 
   const dateFormat = "MMMM yyyy";
   const days = eachDayOfInterval({ start: startDate, end: endDate });
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekDays = weekStartDay === 'monday'
+    ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));

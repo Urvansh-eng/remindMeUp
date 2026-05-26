@@ -3,12 +3,23 @@ import { Menu, Sun, Bell, Settings2, CheckCircle, Circle, Info, Sparkles, Refres
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 
+import { AppNotification } from '../App';
+
 interface DashboardProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
+  notifications: AppNotification[];
+  setNotifications: React.Dispatch<React.SetStateAction<AppNotification[]>>;
+  onCompleteTask: (taskId: number) => Promise<void>;
 }
 
-const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOpen }) => {
+const DashboardView: React.FC<DashboardProps> = ({ 
+  isSidebarOpen, 
+  setIsSidebarOpen,
+  notifications,
+  setNotifications,
+  onCompleteTask
+}) => {
   const today = new Date();
   const headerDate = today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
   const bannerDate = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -17,6 +28,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
   const [todaysTasks, setTodaysTasks] = useState<any[]>([]);
   const [aiBriefing, setAiBriefing] = useState<string>('');
   const [briefingLoading, setBriefingLoading] = useState(true);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   useEffect(() => {
     // 0. Fetch tasks from our new Supabase backend
@@ -25,7 +37,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || 'dev-bypass-user-12345';
 
-        const response = await fetch('http://localhost:4000/api/tasks', {
+        const response = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -35,7 +47,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
         // Ensure we always set an array, even if the backend returns an error object
         if (Array.isArray(data)) {
           const todayStr = format(today, 'yyyy-MM-dd');
-          const filtered = data.filter((task: any) => task.date === todayStr);
+          const filtered = data.filter((task: any) => task.date && task.date.startsWith(todayStr));
           setTodaysTasks(filtered);
         } else {
           console.error("Backend did not return an array:", data);
@@ -54,7 +66,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
         setBriefingLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || 'dev-bypass-user-12345';
-        const res = await fetch('http://localhost:4000/api/ai/briefing', {
+        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -126,7 +138,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
     setTodaysTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updatedCompleted } : t));
 
     try {
-      await fetch(`http://localhost:4000/api/tasks/${task.id}`, {
+      await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -162,9 +174,116 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="btn btn-ghost p-2 rounded-full"><Bell size={18} /></button>
-            <button className="btn btn-ghost p-2 rounded-full"><Settings2 size={18} /></button>
+          <div className="flex items-center gap-3 relative">
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="btn btn-ghost p-2 rounded-full hover:bg-zinc-800 relative cursor-pointer"
+              >
+                <Bell size={18} className={notifications.filter(n => !n.read).length > 0 ? "text-indigo-400 animate-pulse" : "text-zinc-400"} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-crimson rounded-full border border-zinc-950 animate-ping"></span>
+                )}
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-crimson rounded-full border border-zinc-950"></span>
+                )}
+              </button>
+
+              {/* Sleek Premium Notification Center Dropdown */}
+              {isNotifOpen && (
+                <div className="absolute right-0 mt-3 w-80 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/40">
+                    <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                      <Bell size={12} className="text-indigo-400" />
+                      Notifications
+                    </h3>
+                    {notifications.filter(n => !n.read).length > 0 && (
+                      <button 
+                        onClick={() => {
+                          setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                        }}
+                        className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/40">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-zinc-500 text-xs">
+                        No recent notifications.
+                      </div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          onClick={() => {
+                            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                          }}
+                          className={`p-3 transition-colors cursor-pointer hover:bg-zinc-800/30 flex gap-2.5 ${!notif.read ? 'bg-indigo-500/[0.02]' : ''}`}
+                        >
+                          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                            !notif.read ? 'bg-indigo-500' : 'bg-transparent'
+                          }`} />
+                          
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex justify-between items-start gap-1">
+                              <p className="text-[11px] font-semibold text-zinc-200 truncate">{notif.title}</p>
+                              <span className="text-[9px] text-zinc-500 whitespace-nowrap">
+                                {new Date(notif.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 leading-normal">{notif.message}</p>
+                            
+                            {!notif.read && notif.taskId && (
+                              <div className="flex gap-2 pt-1.5">
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (notif.taskId !== undefined) {
+                                      await onCompleteTask(notif.taskId);
+                                    }
+                                    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                                  }}
+                                  className="text-[9px] font-bold text-brand-emerald hover:underline cursor-pointer"
+                                >
+                                  Complete
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setNotifications(prev => prev.filter(n => n.id !== notif.id));
+                                  }}
+                                  className="text-[9px] font-bold text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  
+                  {notifications.length > 0 && (
+                    <div className="p-2 border-t border-zinc-800 bg-zinc-950/40 text-center">
+                      <button 
+                        onClick={() => {
+                          setNotifications([]);
+                        }}
+                        className="text-[10px] font-bold text-brand-crimson hover:underline cursor-pointer"
+                      >
+                        Clear All History
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <button className="btn btn-ghost p-2 rounded-full hover:bg-zinc-800 cursor-pointer"><Settings2 size={18} /></button>
           </div>
         </header>
 
@@ -188,7 +307,7 @@ const DashboardView: React.FC<DashboardProps> = ({ isSidebarOpen, setIsSidebarOp
                       try {
                         const { data: { session } } = await supabase.auth.getSession();
                         const token = session?.access_token || 'dev-bypass-user-12345';
-                        const res = await fetch('http://localhost:4000/api/ai/briefing', { headers: { 'Authorization': `Bearer ${token}` } });
+                        const res = await fetch(`\${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/ai/briefing`, { headers: { 'Authorization': `Bearer ${token}` } });
                         const data = await res.json();
                         if (data.briefing) setAiBriefing(data.briefing);
                       } catch (e) {} finally { setBriefingLoading(false); }
